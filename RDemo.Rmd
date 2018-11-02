@@ -223,26 +223,19 @@ Some short exercises you might want to try in the following blank chunk:
 
 ```{r}
 #--- 1
-eleven %>% filter(country == "United Kingdom") %>% dplyr::select(country, gini)
+
 
 #--- 2
-eleven %>% group_by(reg) %>% summarise(median(case.d, na.rm = T))
+
 
 #--- 3
-eleven %>% ggplot(aes(x = reg, y = case.d, color = reg)) + geom_boxplot() + theme_bw()
+
 
 #--- 4
-eleven %>% mutate(pop.dens.q = factor(ntile(pop.density, 5),
-                                      labels = c("Q1", "Q2", "Q3", "Q4", "Q5"))) %>% 
-  group_by(pop.dens.q) %>%
-  filter(complete.cases(tb)) %>%
-  summarise(max(tb))
+
 
 #--- 5
-eleven %>% filter(reg == "AFR" & lmic == "Low income") %>%
-  mutate(pop.dens.q = factor(ntile(pop.density, 5), labels = c("Q1", "Q2", "Q3", "Q4", "Q5"))) %>%
-  glm(tb ~ slums + pop.dens.q, family = gaussian, data = .) %>%
-  regress.display()
+
 
 ```
 
