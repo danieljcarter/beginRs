@@ -1,0 +1,248 @@
+---
+title: "R Demo"
+author: "Daniel J Carter"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+This notebook contains a short demo for the BeginRs group. Whitespace in this notebook surrounds "chunks" of code. This notebook runs code to read in a dataset, produce some summary statistics on that dataset, and then do some visualisation. Run code by pressing Ctrl-Enter with your cursor on the line you wish to run. Ctrl-Shift-Enter runs a whole chunk.
+
+Note you may wish to insert your own code chunks - Ctrl-Alt-I is the default but on some computers this produces an I with an accent on it, so you may wish to go to Tools -> Modify Keyboard Shortcuts to adjust this (I used Ctrl-Shift-I). You can also select a theme from Global Options -> Appearance.
+
+```{r, warnings = F, echo = F}
+#--- This code installs (if you uncomment) and then reads in the functions from the tidyverse & epiDisplay packages
+
+# install.packages("epiDisplay", dependencies = T)
+# install.packages("ggrepel", dependencies = T)
+# install.packages("tidyverse", dependencies = T)
+
+library(epiDisplay)
+library(ggrepel)
+library(tidyverse) # always load the tidyverse last!
+
+#--- No scientific notation and round to 3 dps pls
+options(scipen=4, digits = 3)
+```
+
+We read in an ecological dataset containing some data relevant to TB & the SDG goals, pulled from the SDG data repository and do some basic operations to it. First, we read it in. Reading in the file stores it as a dataframe. A dataframe is the same as a dataset in Stata - it's like a matrix with multiple different types of objects (e.g. string, numeric, factor). We examine the rows and also some of the variables. Note that we must specify which dataframe we want to access, then access the column using the $ - this is to avoid confusion with multiple datasets.
+
+We then do a more complex operation using functions from the tidyverse. The %>% operator, the %>%, takes the result of what's on the left, and puts it into the leftmost argument of what's on the right. So it's like writing sentences. To get mean TB incidence by LMIC descriptor, we take the complete dataset and then we filter() it. How do we filter it? By extracting only those countries with no missing data on TB incidence (complete cases). Once we've done that, we want to tell R to group the data into groups defined by LMIC descriptor using group_by(). Now that we've grouped, we can summarise() the data by extracting the mean TB incidence. We could include any function into summarise, even a user defined one - an example of how flexible R could be.
+
+
+```{r}
+#---Get & set working directory
+getwd()
+
+#--- Read in a csv file
+eleven <- read.csv("./elevendemo.csv")
+
+#--- Examine the first few rows
+head(eleven)
+
+#--- Examine the LMIC variable (categorical; known as 'factor' in R)
+summary(eleven$lmic)
+
+#--- Examine the GDP variable
+summary(eleven$gdp)
+plot(eleven$gdp)
+
+#--- Get mean TB Incidence by LMIC
+eleven %>% filter(complete.cases(tb)) %>% group_by(lmic) %>% summarise(mean(tb))
+
+```
+
+In our next chunk, we introduce a new data frame based on removing the high income countries. This time we use the assignment operator <- to tell R to name the result that we get from our analysis and store it as a new object (it should appear in the environment window). We perform some tidying operations on it, excluding countries with missing data on slums and (arbitrarily!) remove the urban poverty variable.
+
+```{r}
+#--- Filter out high income countries and store the result
+lmic <- eleven %>% filter(lmic != "High income")
+
+#--- Exclude countries with missing data on slums and then remove the urban poverty variable
+lmic <- lmic %>% filter(!is.na(slums)) %>% dplyr::select(-urban.pov.hc)
+
+#--- Get help!
+?filter
+
+```
+
+The code below makes a rather pretty plot. It looks complex but is fairly straightforward if you break it down into parts. We pipe in the dataset to the ggplot() function. One argument of the core ggplot function is aes() for aesthetics, and within aes() I specify the x and y axis. Alone, that won't do anything as ggplot() doesn't know what type of plot you want. So we use geom_point() to tell it we want a scatter plot, and the color should correspond to the region.
+
+We can also add a size parameter to geom_point. We can use geom_smooth to add a linear regression by specifying method = "lm" - the optional arguments add a 95% CI, change the transparency of that CI, and the color of the line. 
+
+Part of the customisability of R comes from user created packages - ggrepel, for example, extends ggplot to have text as points. You can check the arguments for ggrepel by using the ? functionality, or directly search for its "vignette" which will provide a number of examples.
+
+We also add labels to the plot for a more professional finish. Note that this could have all been done in one command. Note in fact that because of the way pipes work, we could have done produced this plot without storing any intermediate steps, starting from the dataset itself. See the commented code at the bottom of the chunk (note you can uncomment by highlighting and pressing Ctrl-Shift-C)
+
+```{r}
+#--- Make a scatter plot
+slumplot <- lmic %>% ggplot(aes(x = slums, y = tb)) +
+  geom_point(aes(color = reg)) 
+slumplot
+
+#--- Turn it into a bubble plot
+slumplot <- lmic %>% ggplot(aes(x = slums, y = tb)) +
+  geom_point(aes(color = reg, size = pop)) 
+slumplot
+
+#--- Add a regression line and change the theme to black & white
+slumplot <- slumplot + geom_smooth(method = "lm", se = T, alpha = 0.2, color = "black") +
+  theme_bw()
+slumplot
+
+#--- Add names of countries using geom_text_repel (from a package we loaded)
+slumplot <- slumplot + geom_text_repel(aes(color = reg, label = country), size = 2.5)
+slumplot
+
+#--- Add labels
+slumplot <- slumplot + labs(title = "LMICs: Slum Prevalence vs. TB Incidence", 
+       y = "TB Incidence (cases per 100,000/year)", 
+       x = "Slum Prevalence (%)", 
+       caption = "Source: SDG Repository",
+       color = "Region",
+       size = "Population")
+slumplot
+
+ggsave("rdemoslumplot.pdf")
+
+#--- All together now...
+# eleven %>% 
+#   filter(lmic != "High income") %>% 
+#   filter(!is.na(slums)) %>% 
+#   dplyr::select(-urban.pov.hc) %>%
+#   ggplot(aes(x = slums, y = tb)) +
+#   geom_point(aes(color = reg, size = pop)) + 
+#   geom_smooth(method = "lm", se = T, alpha = 0.2, color = "black") +
+#   theme_bw() + 
+#   labs(title = "LMICs: Slum Prevalence vs. TB Incidence", 
+#        y = "TB Incidence (cases per 100,000/year)", 
+#        x = "Slum Prevalence (%)", 
+#        caption = "Source: SDG Repository",
+#        color = "Region",
+#        size = "Population")
+  
+```
+
+Now let's do a quick logistic regression and extract the results. The glm() function (unsurprisingly) fits generalised linear models in R. First we create (artificial!) binary outcome and exposure variables using mutate() in the tidyverse. The code again looks complex but can be broken down quite simply: first we run an ifelse() statement that says if TB is higher than the 75th percentile, replace with 1, else replace with 0. 
+
+We wrap that in the factor() command to tell R it's working with a factor not a number, and we give it labels. Note that labels takes a list of strings, so we generate one using the c() [for concatenate] command.
+
+We generate quartiles of slums using the ntile() command, which should be clear, and then wrap that again in the function()
+
+We use filter() and select() from the tidyverse to check out some data on our new variables from Brazil and use the cc() function in epiDisplay to get a 2x4 table easily, alongside an OR.
+
+We then conduct the logistic regression by piping in the new dataset with the added values. Here, we do not pipe to the first argument (which is always the formula for the regression), but instead pipe to where the fullstop is placed, in this case, the 'data' argument. Type ?glm if you need to see the full argument specification.
+
+To run a regression in R of any kind, you need a formula. For an outcome Y and exposure X, with confounders C, the formula is set up as Y ~ X + C1 + C2 + C3 etc., where the tilde means 'predict what's on the left from on the right'. Note you can specify interactions with C1*C2 (which by default includes C1 + C2). Play around with the formula that is below (here we clearly have many continuous variables and a small sample size, so don't read into it too much, it's just a demo!!)
+
+Note the useful logistic.display() function which handily provides Stata-like output - the standard glm output is presented on the log scale with CIs and ain't nobody got time for that.
+
+
+
+```{r}
+#--- Get quantiles of TB Incidence & Slums
+quantile(lmic$tb)
+quantile(lmic$slums)
+
+#--- Generate binary variable of TB Incidence & Slum Quartiles
+lmic2 <- lmic %>% mutate(tb.binary = factor(ifelse(tb > 306, 1, 0), 
+                                           labels = c("High TB", "Low TB")),
+                        slum.quart = factor(ntile(slums, 4),
+                                             labels = c("Q1", "Q2", "Q3", "Q4")))
+
+#--- Examine some select data about Brazil
+lmic2 %>% filter(country == "Brazil") %>% dplyr::select(country, gdp, gini, tb, tb.binary, slum.quart)
+  
+#--- Get a 2x4 table
+cc(lmic2$slum.quart, lmic2$tb.binary, graph = F) # NB exposure first!
+
+#--- Conduct a logistic regression
+lmic2 %>% glm(tb.binary ~ slum.quart + emp.ratio + lmic, family = binomial(link = "logit"), data = .) %>% logistic.display()
+
+#--- All together now...
+# lmic %>% mutate(tb.binary = factor(ifelse(tb > quantile(tb)[4], 1, 0), 
+#                             labels = c("High TB", "Low TB")),
+#                 slum.quart = factor(ntile(slums, 4), 
+#                             labels = c("Q1", "Q2", "Q3", "Q4"))) %>%
+#         glm(tb.binary ~ slum.quart + emp.ratio + lmic, 
+#             family = binomial(link = "logit"), 
+#             data = .) %>% 
+#         logistic.display()
+
+#--- Bonus: See if you can figure out what the [4] in quantile(tb)[4] does...
+
+
+```
+
+All of these operations were on a clean dataset. But real world datasets are rarely like that...so what do we do with a messy dataset? The tidyverse comes with the built in dataset from a Global TB report 2014.
+
+This code is not meant for you to fully understand, but just to demonstrate how easy it is to clean data in R - a few short lines of code and the WHO data is clean and ready to analyse.
+
+---
+
+However, if you're interested...intuitively & step by step:
+
+1. Gather -- converts data from wide to long, i.e. it takes several 'key' columns (in this case, all the age-sex-casetype disaggregated incidences) and condenses them into one column (which we have called "key") alongside a single value for each one which we have fittingly called "incidence".
+
+2. Mutate -- changes all instances of "newrel" in the key column to "new_rel" to make for consistent column names. 
+
+3. Separate -- split the values in "key" into the three new columns "new", "casetype", and "sexage" (see now why we needed to do the step above?) -- the tidyverse function automatically detects the underscore is the separator.
+
+4. Select -- drop redundant country name columns.
+
+5. Separate -- separate the sex and age variables at the first character.
+
+
+
+```{r}
+#--- Confirm for yourself that this dataset is messy if you like
+View(who)
+
+#--- Cleaning
+who %>%
+  gather(key, incidence, new_sp_m014:newrel_f65, na.rm = TRUE) %>% 
+  mutate(key = stringr::str_replace(key, "newrel", "new_rel")) %>%
+  separate(key, c("new", "casetype", "sexage")) %>% 
+  dplyr::select(-new, -iso2, -iso3) %>% 
+  separate(sexage, c("sex", "age"), sep = 1)
+
+```
+
+
+Some short exercises you might want to try in the following blank chunk:
+
+1. Extract from the full SDG dataset the value of the UK's Gini coefficient
+
+2. Extract from the full SDG dataset the median case detection rate in each WHO Region (hint: you may need to include an option to handle NAs, check ?median)
+
+3. Produce boxplots for the above medians using ggplot() and geom_boxplot() with a black and white theme and a color for each region
+
+4. In the eleven dataset, create quartiles of population density (pop.dens.q), label them, and get the maximum TB incidence in each one.
+
+5. Run a linear regression [hint: family = gaussian or ?lm] using only data from African low income countries predicting TB incidence from slum prevalence adjusting for quartiles of population density [hint: regress.display() is useful here]
+
+```{r}
+#--- 1
+eleven %>% filter(country == "United Kingdom") %>% dplyr::select(country, gini)
+
+#--- 2
+eleven %>% group_by(reg) %>% summarise(median(case.d, na.rm = T))
+
+#--- 3
+eleven %>% ggplot(aes(x = reg, y = case.d, color = reg)) + geom_boxplot() + theme_bw()
+
+#--- 4
+eleven %>% mutate(pop.dens.q = factor(ntile(pop.density, 5),
+                                      labels = c("Q1", "Q2", "Q3", "Q4", "Q5"))) %>% 
+  group_by(pop.dens.q) %>%
+  filter(complete.cases(tb)) %>%
+  summarise(max(tb))
+
+#--- 5
+eleven %>% filter(reg == "AFR" & lmic == "Low income") %>%
+  mutate(pop.dens.q = factor(ntile(pop.density, 5), labels = c("Q1", "Q2", "Q3", "Q4", "Q5"))) %>%
+  glm(tb ~ slums + pop.dens.q, family = gaussian, data = .) %>%
+  regress.display()
+
+```
+
